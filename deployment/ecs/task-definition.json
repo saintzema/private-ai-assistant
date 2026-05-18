@@ -1,0 +1,161 @@
+{
+  "family": "private-ai-assistant",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "4096",
+  "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/private-ai-ecs-task-role",
+  "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/private-ai-ecs-execution-role",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "${ECR_REGISTRY}/private-ai-backend:${IMAGE_TAG}",
+      "cpu": 1024,
+      "memory": 2048,
+      "memoryReservation": 512,
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "ENVIRONMENT", "value": "production" },
+        { "name": "ALGORITHM", "value": "HS256" },
+        { "name": "ACCESS_TOKEN_EXPIRE_MINUTES", "value": "30" },
+        { "name": "REFRESH_TOKEN_EXPIRE_DAYS", "value": "7" },
+        { "name": "AWS_REGION", "value": "${AWS_REGION}" },
+        { "name": "S3_BUCKET_NAME", "value": "${S3_BUCKET_NAME}" },
+        { "name": "EMBEDDING_PROVIDER", "value": "openai" },
+        { "name": "EMBEDDING_MODEL", "value": "text-embedding-3-small" },
+        { "name": "OPENAI_MODEL", "value": "gpt-4o-mini" },
+        { "name": "CHUNK_SIZE", "value": "1000" },
+        { "name": "CHUNK_OVERLAP", "value": "200" },
+        { "name": "LOG_LEVEL", "value": "INFO" }
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:private-ai/production:DATABASE_URL::"
+        },
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:private-ai/production:SECRET_KEY::"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:private-ai/production:OPENAI_API_KEY::"
+        },
+        {
+          "name": "REDIS_URL",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:private-ai/production:REDIS_URL::"
+        },
+        {
+          "name": "CELERY_BROKER_URL",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:private-ai/production:CELERY_BROKER_URL::"
+        },
+        {
+          "name": "CELERY_RESULT_BACKEND",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:private-ai/production:CELERY_RESULT_BACKEND::"
+        },
+        {
+          "name": "SMTP_USER",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:private-ai/production:SMTP_USER::"
+        },
+        {
+          "name": "SMTP_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:private-ai/production:SMTP_PASSWORD::"
+        },
+        {
+          "name": "AWS_MARKETPLACE_PRODUCT_CODE",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:private-ai/production:AWS_MARKETPLACE_PRODUCT_CODE::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/private-ai-assistant/backend",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "ulimits": [
+        {
+          "name": "nofile",
+          "softLimit": 65536,
+          "hardLimit": 65536
+        }
+      ],
+      "readonlyRootFilesystem": false,
+      "user": "1001:1001"
+    },
+    {
+      "name": "frontend",
+      "image": "${ECR_REGISTRY}/private-ai-frontend:${IMAGE_TAG}",
+      "cpu": 512,
+      "memory": 1024,
+      "memoryReservation": 256,
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "NEXT_TELEMETRY_DISABLED", "value": "1" },
+        { "name": "NEXT_PUBLIC_API_URL", "value": "https://${DOMAIN_NAME}/api/v1" },
+        { "name": "NEXT_PUBLIC_APP_NAME", "value": "Private AI Assistant" },
+        { "name": "NEXT_PUBLIC_APP_URL", "value": "https://${DOMAIN_NAME}" }
+      ],
+      "secrets": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/private-ai-assistant/frontend",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:3000 || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "readonlyRootFilesystem": false,
+      "user": "1001:1001",
+      "dependsOn": [
+        {
+          "containerName": "backend",
+          "condition": "HEALTHY"
+        }
+      ]
+    }
+  ],
+  "tags": [
+    { "key": "Project", "value": "private-ai-assistant" },
+    { "key": "Environment", "value": "production" },
+    { "key": "ManagedBy", "value": "cloudformation" }
+  ]
+}

@@ -1,0 +1,193 @@
+version: "3.9"
+
+# Production overrides for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+networks:
+  private-ai-net:
+    driver: bridge
+
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+x-prod-logging: &prod-logging
+  driver: "awslogs"
+  options:
+    awslogs-region: "${AWS_REGION:-us-east-1}"
+    awslogs-group: "/private-ai-assistant/production"
+    awslogs-stream-prefix: "docker"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    image: ${ECR_REGISTRY}/${ECR_REPO_BACKEND:-private-ai-backend}:${IMAGE_TAG:-latest}
+    volumes: []
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - AWS_BEDROCK_MODEL_ID=${AWS_BEDROCK_MODEL_ID}
+      - AWS_BEDROCK_EMBEDDING_MODEL_ID=${AWS_BEDROCK_EMBEDDING_MODEL_ID}
+      - AWS_MARKETPLACE_PRODUCT_CODE=${AWS_MARKETPLACE_PRODUCT_CODE}
+      - AWS_MARKETPLACE_REGION=${AWS_MARKETPLACE_REGION:-us-east-1}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - ENVIRONMENT=production
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.25"
+      replicas: 2
+    logging: *prod-logging
+    <<: *restart-policy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips='*'
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: runner
+    image: ${ECR_REGISTRY}/${ECR_REPO_FRONTEND:-private-ai-frontend}:${IMAGE_TAG:-latest}
+    volumes: []
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - NEXT_PUBLIC_APP_NAME=${NEXT_PUBLIC_APP_NAME:-Private AI Assistant}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+      - NODE_ENV=production
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.1"
+      replicas: 2
+    logging: *prod-logging
+    <<: *restart-policy
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-private_ai}
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.25"
+    logging: *prod-logging
+    <<: *restart-policy
+
+  nginx:
+    image: ${ECR_REGISTRY}/${ECR_REPO_NGINX:-private-ai-nginx}:${IMAGE_TAG:-latest}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/nginx/ssl:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+        reservations:
+          memory: 64M
+          cpus: "0.05"
+    logging: *prod-logging
+    <<: *restart-policy
+
+  redis:
+    image: redis:7-alpine
+    ports: []
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD}
+      --bind 0.0.0.0
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "0.25"
+        reservations:
+          memory: 128M
+          cpus: "0.05"
+    logging: *prod-logging
+    <<: *restart-policy
+
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    image: ${ECR_REGISTRY}/${ECR_REPO_BACKEND:-private-ai-backend}:${IMAGE_TAG:-latest}
+    volumes: []
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - ENVIRONMENT=production
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.25"
+      replicas: 2
+    logging: *prod-logging
+    <<: *restart-policy
+    command: celery -A celery_app worker --loglevel=warning --concurrency=8 -Q default,documents,email
+
+  flower:
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.1"
+    logging: *prod-logging
+    <<: *restart-policy
