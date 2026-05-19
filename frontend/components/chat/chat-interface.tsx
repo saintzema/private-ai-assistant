@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Send, Loader2, StopCircle } from "lucide-react";
 import { chatsApi } from "@/lib/api";
 import MessageBubble from "./message-bubble";
+import { MessageRole } from "@/types";
 import type { Message, Source } from "@/types";
 
 interface Props {
@@ -14,14 +15,14 @@ interface Props {
 
 interface StreamingMessage {
   id: string;
-  role: "assistant";
+  role: MessageRole.Assistant;
   content: string;
   sources: Source[];
   isStreaming: boolean;
   created_at: string;
 }
 
-export default function ChatInterface({ chatId, workspaceId, initialMessages = [] }: Props) {
+export function ChatInterface({ chatId, workspaceId, initialMessages = [] }: Props) {
   const [messages, setMessages] = useState<(Message | StreamingMessage)[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -49,14 +50,14 @@ export default function ChatInterface({ chatId, workspaceId, initialMessages = [
     const userMsg: Message = {
       id: Date.now().toString(),
       chat_id: chatId,
-      role: "user",
+      role: MessageRole.User,
       content: query,
       created_at: new Date().toISOString(),
     };
 
     const streamingMsg: StreamingMessage = {
       id: "streaming",
-      role: "assistant",
+      role: MessageRole.Assistant,
       content: "",
       sources: [],
       isStreaming: true,

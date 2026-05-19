@@ -57,9 +57,36 @@ class EmailService:
     """Async SMTP email sender with HTML templates."""
 
     async def _send(self, to_email: str, subject: str, html_body: str) -> None:
+        if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
+            import boto3
+            import asyncio
+            ses = boto3.client(
+                'ses',
+                region_name=getattr(settings, 'AWS_REGION', 'us-east-1'),
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
+            )
+            def _send_ses():
+                ses.send_email(
+                    Source=f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
+                    Destination={'ToAddresses': [to_email]},
+                    Message={
+                        'Subject': {'Data': subject},
+                        'Body': {'Html': {'Data': html_body}}
+                    }
+                )
+            try:
+                await asyncio.to_thread(_send_ses)
+                logger.info("Email '%s' sent to %s via AWS SES", subject, to_email)
+                return
+            except Exception as exc:
+                logger.error("Failed to send email to %s via SES: %s", to_email, exc)
+                # Fall through to SMTP if SES fails? No, raise.
+                raise
+
         if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
             logger.warning(
-                "SMTP credentials not configured — skipping email to %s", to_email
+                "AWS SES and SMTP credentials not configured — skipping email to %s", to_email
             )
             return
 

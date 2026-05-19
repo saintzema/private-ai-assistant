@@ -8,7 +8,9 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentList } from "@/components/documents/document-list";
 import { DocumentUpload } from "@/components/documents/document-upload";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatBytes, formatPercent } from "@/lib/utils";
+import { DocumentStatus } from "@/types";
 import type { Document, PaginatedResponse } from "@/types";
 
 export default function DocumentsPage() {
@@ -24,8 +26,8 @@ export default function DocumentsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
 
-  const loadDocuments = useCallback(async () => {
-    setIsLoading(true);
+  const loadDocuments = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const data = await documentsApi.list(workspaceId, {
         page,
@@ -35,15 +37,28 @@ export default function DocumentsPage() {
       setDocuments(data.items);
       setTotalCount(data.total);
     } catch {
-      toast.error("Failed to load documents");
+      if (!silent) toast.error("Failed to load documents");
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [workspaceId, page, search, toast]);
 
   useEffect(() => {
     if (workspaceId) loadDocuments();
   }, [loadDocuments, workspaceId]);
+
+  useEffect(() => {
+    const anyProcessing = documents.some(
+      (d) => d.status === DocumentStatus.Pending || d.status === DocumentStatus.Processing
+    );
+    if (!anyProcessing) return;
+
+    const interval = setInterval(() => {
+      loadDocuments(true);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [documents, loadDocuments]);
 
   const handleUploadComplete = () => {
     setShowUpload(false);
@@ -95,34 +110,6 @@ export default function DocumentsPage() {
         </button>
       </div>
 
-      {/* Storage bar */}
-      {currentWorkspace && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-              <HardDrive className="w-4 h-4" />
-              Storage usage
-            </div>
-            <span className="text-sm text-slate-500 dark:text-slate-400">
-              {formatBytes(storageUsed)} / {formatBytes(storageLimit)}
-            </span>
-          </div>
-          <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${
-                storagePercent > 90
-                  ? "bg-red-500"
-                  : storagePercent > 70
-                  ? "bg-yellow-500"
-                  : "bg-blue-500"
-              }`}
-              style={{ width: `${Math.min(storagePercent, 100)}%` }}
-            />
-          </div>
-          <p className="text-xs text-slate-400 mt-1">{storagePercent}% used</p>
-        </div>
-      )}
-
       {/* Document list */}
       <DocumentList
         workspaceId={workspaceId}
@@ -140,13 +127,18 @@ export default function DocumentsPage() {
       />
 
       {/* Upload dialog */}
-      {showUpload && (
-        <DocumentUpload
-          workspaceId={workspaceId}
-          onClose={() => setShowUpload(false)}
-          onComplete={handleUploadComplete}
-        />
-      )}
+      <Dialog open={showUpload} onOpenChange={setShowUpload}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Upload Documents</DialogTitle>
+          </DialogHeader>
+          <DocumentUpload
+            workspaceId={workspaceId}
+            onClose={() => setShowUpload(false)}
+            onUploadComplete={handleUploadComplete}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

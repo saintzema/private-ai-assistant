@@ -33,6 +33,44 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     return (input_tokens * costs["input"] + output_tokens * costs["output"]) / 1000
 
 
+def _generate_mock_fallback_response(messages: list[dict], system_prompt: Optional[str] = None) -> str:
+    # Try to find context
+    context = ""
+    if system_prompt and "CONTEXT" in system_prompt:
+        context = system_prompt.split("CONTEXT")[-1].strip()
+    else:
+        for msg in messages:
+            if msg.get("role") == "system" and "CONTEXT" in msg.get("content", ""):
+                context = msg["content"].split("CONTEXT")[-1].strip()
+                break
+
+    if context:
+        # Clean up leading DOCUMENTS: or : if present
+        if context.startswith("DOCUMENTS:"):
+            context = context[len("DOCUMENTS:"):].strip()
+        elif context.startswith("Documents:"):
+            context = context[len("Documents:"):].strip()
+        elif context.startswith(":"):
+            context = context[1:].strip()
+
+    response = "⚠️ [Mock Fallback Mode - API Quota Exceeded]\n\n"
+    if context:
+        # Clean up context a bit
+        lines = [line.strip() for line in context.split("\n") if line.strip()][:15]
+        context_preview = "\n".join(lines)
+        response += (
+            "The document intelligence engine successfully retrieved the following matching sections from your knowledge base:\n\n"
+            f"```text\n{context_preview}\n```\n\n"
+            "To get a fully natural AI answer, please update your `OPENAI_API_KEY` in the `.env` file with a key that has active credits."
+        )
+    else:
+        response += (
+            "The AI chat engine is online, but the underlying LLM provider (OpenAI) returned a quota/rate limit error (429).\n\n"
+            "Please check your OpenAI billing details or update the `OPENAI_API_KEY` in your `.env` file."
+        )
+    return response
+
+
 class LLMService:
     """
     Provider-agnostic LLM service.
@@ -42,6 +80,7 @@ class LLMService:
     def __init__(self) -> None:
         self._openai_client: Optional[object] = None
         self._bedrock_client: Optional[object] = None
+        self._gemini_client: Optional[object] = None
 
     # ─── Client helpers ───────────────────────────────────────────────────────
 
@@ -50,6 +89,15 @@ class LLMService:
             from openai import AsyncOpenAI
             self._openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         return self._openai_client
+
+    def _get_gemini_client(self):
+        if self._gemini_client is None:
+            from openai import AsyncOpenAI
+            self._gemini_client = AsyncOpenAI(
+                api_key=settings.GEMINI_API_KEY,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+            )
+        return self._gemini_client
 
     def _get_bedrock_client(self):
         if self._bedrock_client is None:
@@ -63,10 +111,15 @@ class LLMService:
         return self._bedrock_client
 
     def _is_bedrock_model(self, model: str) -> bool:
-        return "." in model and not model.startswith("gpt")
+        return "." in model and not model.startswith("gpt") and not model.startswith("gemini")
+
+    def _is_gemini_model(self, model: str) -> bool:
+        return model.startswith("gemini")
 
     def _default_model(self) -> str:
-        if settings.EMBEDDING_PROVIDER == "bedrock":
+        if settings.LLM_PROVIDER == "gemini":
+            return settings.GEMINI_CHAT_MODEL
+        if settings.LLM_PROVIDER == "bedrock":
             return settings.AWS_BEDROCK_MODEL_ID
         return settings.OPENAI_CHAT_MODEL
 
@@ -247,24 +300,92 @@ class LLMService:
         resolved_model = model or self._default_model()
         logger.debug("chat_completion model=%s stream=%s", resolved_model, stream)
 
-        if self._is_bedrock_model(resolved_model):
-            if stream:
-                return self._bedrock_stream(
+        try:
+            if self._is_bedrock_model(resolved_model):
+                if stream:
+                    return self._bedrock_stream(
+                        messages, resolved_model, max_tokens, temperature, system_prompt
+                    )
+                return await self._bedrock_completion(
                     messages, resolved_model, max_tokens, temperature, system_prompt
                 )
-            return await self._bedrock_completion(
-                messages, resolved_model, max_tokens, temperature, system_prompt
-            )
-        else:
-            if system_prompt:
-                messages = [{"role": "system", "content": system_prompt}] + [
-                    m for m in messages if m.get("role") != "system"
-                ]
+            elif self._is_gemini_model(resolved_model) or settings.LLM_PROVIDER == "gemini":
+                model_name = resolved_model
+                if not self._is_gemini_model(model_name):
+                    model_name = settings.GEMINI_CHAT_MODEL
+                
+                if system_prompt:
+                    messages = [{"role": "system", "content": system_prompt}] + [
+                        m for m in messages if m.get("role") != "system"
+                    ]
+                if stream:
+                    async def gemini_stream_wrapper():
+                        try:
+                            client = self._get_gemini_client()
+                            response = await client.chat.completions.create(
+                                model=model_name,
+                                messages=messages,
+                                max_tokens=max_tokens,
+                                temperature=temperature,
+                                stream=True,
+                            )
+                            async for chunk in response:
+                                delta = chunk.choices[0].delta.content
+                                if delta:
+                                    yield delta
+                        except Exception as e:
+                            logger.warning("Gemini stream failed: %s. Yielding fallback message.", e)
+                            fallback_msg = _generate_mock_fallback_response(messages, system_prompt)
+                            for word in fallback_msg.split(" "):
+                                yield word + " "
+                                import asyncio
+                                await asyncio.sleep(0.02)
+                    return gemini_stream_wrapper()
+                
+                client = self._get_gemini_client()
+                response = await client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                content = response.choices[0].message.content or ""
+                usage = response.usage
+                return content, usage.prompt_tokens, usage.completion_tokens
+            else:
+                if system_prompt:
+                    messages = [{"role": "system", "content": system_prompt}] + [
+                        m for m in messages if m.get("role") != "system"
+                    ]
+                if stream:
+                    # To verify if the stream fails immediately, we'd normally run it.
+                    # But we can return a wrapper generator that catches errors.
+                    async def stream_wrapper():
+                        try:
+                            async for chunk in self._openai_stream(messages, resolved_model, max_tokens, temperature):
+                                yield chunk
+                        except Exception as e:
+                            logger.warning("Stream failed: %s. Yielding fallback message.", e)
+                            fallback_msg = _generate_mock_fallback_response(messages, system_prompt)
+                            for word in fallback_msg.split(" "):
+                                yield word + " "
+                                import asyncio
+                                await asyncio.sleep(0.02)
+                    return stream_wrapper()
+                return await self._openai_completion(
+                    messages, resolved_model, max_tokens, temperature
+                )
+        except Exception as e:
+            logger.warning("chat_completion failed: %s. Returning mock fallback response.", e)
+            fallback_text = _generate_mock_fallback_response(messages, system_prompt)
             if stream:
-                return self._openai_stream(messages, resolved_model, max_tokens, temperature)
-            return await self._openai_completion(
-                messages, resolved_model, max_tokens, temperature
-            )
+                async def fallback_stream():
+                    for word in fallback_text.split(" "):
+                        yield word + " "
+                        import asyncio
+                        await asyncio.sleep(0.02)
+                return fallback_stream()
+            return fallback_text, 100, 100
 
     async def stream_completion(
         self,

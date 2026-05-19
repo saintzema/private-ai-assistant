@@ -151,6 +151,21 @@ The platform is multi-tenant: every team gets its own workspace with granular ac
 
 ---
 
+## Quick start (macOS, no Docker)
+
+```bash
+# 1. One-time setup — installs Redis, pgvector, Python deps, npm deps, creates DB
+make setup
+
+# 2. Edit your API keys in .env (OPENAI_API_KEY is required)
+nano .env
+
+# 3. Start everything
+make local
+# → backend:  http://localhost:8000
+# → frontend: http://localhost:3000
+```
+
 ## Quick Start
 
 ### 1. Clone the repository

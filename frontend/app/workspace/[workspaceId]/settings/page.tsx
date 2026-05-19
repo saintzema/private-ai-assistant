@@ -134,6 +134,23 @@ export default function WorkspaceSettingsPage() {
     }
   };
 
+  const [isUpgrading, setIsUpgrading] = useState(false);
+
+  const handleUpgrade = async (plan: "pro" | "enterprise") => {
+    setIsUpgrading(true);
+    try {
+      const updatedSub = await subscriptionsApi.upgrade(workspaceId, plan);
+      setSubscription(updatedSub);
+      const usg = await subscriptionsApi.getUsage(workspaceId);
+      setUsage(usg);
+      toast.success(`Successfully upgraded to ${plan}!`);
+    } catch {
+      toast.error("Failed to upgrade plan");
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
+
   const handleDeleteWorkspace = async () => {
     if (deleteConfirm !== currentWorkspace?.name) return;
     setIsDeleting(true);
@@ -250,11 +267,46 @@ export default function WorkspaceSettingsPage() {
                     {subscription.status}
                   </span>
                 </div>
-                {subscription.plan === Plan.Free && (
-                  <button className="w-full mt-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
-                    Upgrade to Pro
-                  </button>
-                )}
+                <div className="mt-4 flex flex-col sm:flex-row gap-3">
+                  {subscription.plan === Plan.Free && (
+                    <>
+                      <button
+                        onClick={() => handleUpgrade("pro")}
+                        disabled={isUpgrading}
+                        className="flex-1 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isUpgrading && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Upgrade to Pro
+                      </button>
+                      <button
+                        onClick={() => handleUpgrade("enterprise")}
+                        disabled={isUpgrading}
+                        className="flex-1 px-4 py-2.5 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isUpgrading && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Upgrade to Enterprise
+                      </button>
+                    </>
+                  )}
+                  {subscription.plan === Plan.Pro && (
+                    <button
+                      onClick={() => handleUpgrade("enterprise")}
+                      disabled={isUpgrading}
+                      className="w-full px-4 py-2.5 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isUpgrading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Upgrade to Enterprise
+                    </button>
+                  )}
+                  {subscription.plan === Plan.Enterprise && (
+                    <button
+                      disabled
+                      className="w-full px-4 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 text-sm font-medium cursor-not-allowed"
+                    >
+                      You are on the highest tier plan (Enterprise)
+                    </button>
+                  )}
+                </div>
               </div>
 
               {usage && (

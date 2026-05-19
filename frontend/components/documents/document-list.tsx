@@ -215,7 +215,7 @@ export function DocumentList({
 
                 {/* Size */}
                 <div className="hidden md:block text-sm text-slate-500 dark:text-slate-400">
-                  {formatBytes(doc.file_size_bytes)}
+                  {formatBytes(doc.file_size)}
                 </div>
 
                 {/* Status */}

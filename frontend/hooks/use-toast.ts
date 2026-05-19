@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import type { ToastMessage } from "@/types";
 
 let toastCounter = 0;
@@ -43,14 +43,14 @@ export function useToastStore() {
   const subscribe = useCallback(() => {
     const listener: ToastListener = (updated) => setState(updated);
     listeners.add(listener);
-    return () => listeners.delete(listener);
+    return () => { listeners.delete(listener); };
   }, []);
 
   return { toasts: state, subscribe };
 }
 
 export function useToast() {
-  const toast = {
+  const toast = useMemo(() => ({
     success: (title: string, description?: string) =>
       addToast({ type: "success", title, description }),
     error: (title: string, description?: string) =>
@@ -60,7 +60,7 @@ export function useToast() {
     info: (title: string, description?: string) =>
       addToast({ type: "info", title, description }),
     dismiss: (id: string) => removeToast(id),
-  };
+  }), []);
 
   return { toast };
 }

@@ -121,7 +121,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "plan",
-            sa.Enum("free", "pro", "enterprise", name="plan_type"),
+            postgresql.ENUM("free", "pro", "enterprise", name="plan_type", create_type=False),
             nullable=False,
             server_default="free",
         ),
@@ -168,7 +168,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "role",
-            sa.Enum("owner", "admin", "member", "viewer", name="member_role"),
+            postgresql.ENUM("owner", "admin", "member", "viewer", name="member_role", create_type=False),
             nullable=False,
             server_default="member",
         ),
@@ -217,7 +217,7 @@ def upgrade() -> None:
         sa.Column("original_filename", sa.String(500), nullable=False),
         sa.Column(
             "file_type",
-            sa.Enum("pdf", "docx", "txt", "csv", name="file_type"),
+            postgresql.ENUM("pdf", "docx", "txt", "csv", name="file_type", create_type=False),
             nullable=False,
         ),
         sa.Column("file_size", sa.BigInteger(), nullable=False),
@@ -225,7 +225,7 @@ def upgrade() -> None:
         sa.Column("s3_url", sa.Text(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("pending", "processing", "ready", "failed", name="document_status"),
+            postgresql.ENUM("pending", "processing", "ready", "failed", name="document_status", create_type=False),
             nullable=False,
             server_default="pending",
         ),
@@ -362,7 +362,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "role",
-            sa.Enum("user", "assistant", "system", name="message_role"),
+            postgresql.ENUM("user", "assistant", "system", name="message_role", create_type=False),
             nullable=False,
         ),
         sa.Column("content", sa.Text(), nullable=False),
@@ -398,9 +398,9 @@ def upgrade() -> None:
         sa.Column("plan", sa.String(50), nullable=False, server_default="free"),
         sa.Column(
             "status",
-            sa.Enum(
+            postgresql.ENUM(
                 "active", "cancelled", "past_due", "trialing", "unpaid",
-                name="subscription_status",
+                name="subscription_status", create_type=False,
             ),
             nullable=False,
             server_default="active",

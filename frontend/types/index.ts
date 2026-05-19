@@ -85,7 +85,7 @@ export interface Document {
   workspace_id: string;
   name: string;
   file_type: FileType;
-  file_size_bytes: number;
+  file_size: number;
   status: DocumentStatus;
   chunk_count: number;
   error_message?: string;

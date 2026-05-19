@@ -26,12 +26,35 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 interface DocumentUploadProps {
   workspaceId: string;
   onUploadComplete?: () => void;
+  onClose?: () => void;
 }
 
-export function DocumentUpload({ workspaceId, onUploadComplete }: DocumentUploadProps) {
+import type { FileRejection } from "react-dropzone";
+
+export function DocumentUpload({ workspaceId, onUploadComplete, onClose }: DocumentUploadProps) {
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
+  const [pastedText, setPastedText] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const handleUploadPastedText = async () => {
+    if (!pastedText.trim()) return;
+    
+    // Create a File from the text
+    const blob = new Blob([pastedText], { type: 'text/plain' });
+    const file = new File([blob], `pasted_text_${Date.now()}.txt`, { type: 'text/plain' });
+    
+    // Add to upload queue and start upload
+    const newUpload: UploadProgress = {
+      file,
+      progress: 0,
+      status: "pending",
+    };
+    setUploads((prev) => [...prev, newUpload]);
+    
+    setPastedText(""); // Clear textarea
+    await uploadFile(file);
+  };
 
   const updateUpload = (file: File, update: Partial<UploadProgress>) => {
     setUploads((prev) =>
@@ -57,7 +80,7 @@ export function DocumentUpload({ workspaceId, onUploadComplete }: DocumentUpload
   };
 
   const onDrop = useCallback(
-    async (acceptedFiles: File[], rejectedFiles: { file: File; errors: { message: string }[] }[]) => {
+    async (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       // Show rejection errors
       rejectedFiles.forEach(({ file, errors }) => {
         toast.error(
@@ -205,6 +228,35 @@ export function DocumentUpload({ workspaceId, onUploadComplete }: DocumentUpload
           </div>
         </div>
       )}
+
+      {/* Paste text section */}
+      <div className="mt-6 border-t pt-6">
+        <p className="text-sm font-medium mb-3 text-slate-700 dark:text-slate-300">Or paste text directly:</p>
+        <div className="relative">
+          <textarea
+            value={pastedText}
+            onChange={(e) => setPastedText(e.target.value)}
+            placeholder="Paste text here to train the AI..."
+            className="w-full min-h-[120px] p-4 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-y pb-16 transition-colors dark:text-slate-200"
+          />
+          <div className="absolute bottom-3 right-3 flex justify-end">
+            <Button
+              size="sm"
+              disabled={!pastedText.trim()}
+              onClick={handleUploadPastedText}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Upload Text
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-4 flex justify-end">
+        <Button onClick={onClose} variant="outline">
+          Done
+        </Button>
+      </div>
     </div>
   );
 }

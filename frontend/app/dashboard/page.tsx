@@ -42,9 +42,10 @@ export default function DashboardPage() {
     fetchWorkspaces();
   }, [fetchWorkspaces]);
 
-  const totalDocs = workspaces.reduce((s, w) => s + (w.document_count ?? 0), 0);
-  const totalChats = workspaces.reduce((s, w) => s + (w.chat_count ?? 0), 0);
-  const totalMembers = workspaces.reduce((s, w) => s + (w.member_count ?? 0), 0);
+  const safeWorkspaces = Array.isArray(workspaces) ? workspaces : [];
+  const totalDocs = safeWorkspaces.reduce((s, w) => s + (w.document_count ?? 0), 0);
+  const totalChats = safeWorkspaces.reduce((s, w) => s + (w.chat_count ?? 0), 0);
+  const totalMembers = safeWorkspaces.reduce((s, w) => s + (w.member_count ?? 0), 0);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -69,7 +70,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           label="Workspaces"
-          value={workspaces.length}
+          value={safeWorkspaces.length}
           icon={Building2}
           colorClass="bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
         />
@@ -111,7 +112,7 @@ export default function DashboardPage() {
             <div key={i} className="h-44 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
           ))}
         </div>
-      ) : workspaces.length === 0 ? (
+      ) : safeWorkspaces.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
             <Building2 className="w-8 h-8 text-slate-400" />
@@ -132,7 +133,7 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {workspaces.map((ws) => (
+          {safeWorkspaces.map((ws) => (
             <WorkspaceCard
               key={ws.id}
               workspace={ws}

@@ -66,7 +66,16 @@ export function CreateWorkspaceDialog({ open, onOpenChange }: CreateWorkspaceDia
   });
 
   const onSubmit = (data: CreateWorkspaceForm) => {
-    mutation.mutate(data);
+    // Generate a basic slug from the name (lowercase, alphanumeric + hyphens)
+    const slug = data.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    
+    // Fallback if slug generation results in empty string or too short
+    const finalSlug = slug.length >= 3 ? slug : `${slug || "ws"}-${Math.random().toString(36).substring(2, 6)}`;
+    
+    mutation.mutate({ ...data, slug: finalSlug } as any);
   };
 
   const handleClose = () => {

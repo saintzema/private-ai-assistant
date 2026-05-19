@@ -88,7 +88,7 @@ export default function SettingsPage() {
     setCreatingKey(true);
     try {
       const result = await usersApi.createApiKey({ name: newKeyName });
-      setNewKeyValue(result.key);
+      setNewKeyValue(result.key ?? null);
       setApiKeys((prev) => [...prev, result]);
       setNewKeyName("");
     } catch {

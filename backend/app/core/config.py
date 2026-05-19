@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"  # development | staging | production
     DEBUG: bool = False
+    API_PREFIX: str = "/api/v1"
 
     # ─── Security ────────────────────────────────────────────────────────────
     SECRET_KEY: str
@@ -31,24 +32,35 @@ class Settings(BaseSettings):
     # ─── Database ────────────────────────────────────────────────────────────
     DATABASE_URL: str  # postgresql+asyncpg://user:pass@host:5432/db
 
-    # ─── Redis ───────────────────────────────────────────────────────────────
+    # ─── Redis & Celery ──────────────────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
 
     # ─── CORS ────────────────────────────────────────────────────────────────
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8080"]
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8080"
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        if isinstance(v, list):
+            return ",".join(v)
         return v
 
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Return CORS_ORIGINS as a list."""
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
     # ─── AI / Embeddings ─────────────────────────────────────────────────────
-    EMBEDDING_PROVIDER: str = "openai"  # openai | bedrock
+    LLM_PROVIDER: str = "openai"  # openai | bedrock | gemini
+    EMBEDDING_PROVIDER: str = "openai"  # openai | bedrock | gemini
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     OPENAI_CHAT_MODEL: str = "gpt-4o"
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_CHAT_MODEL: str = "gemini-1.5-flash"
+    GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
 
     # ─── AWS ─────────────────────────────────────────────────────────────────
     AWS_ACCESS_KEY_ID: Optional[str] = None
@@ -96,6 +108,10 @@ class Settings(BaseSettings):
         if self.EMBEDDING_PROVIDER == "openai" and not self.OPENAI_API_KEY:
             raise ValueError(
                 "OPENAI_API_KEY is required when EMBEDDING_PROVIDER is 'openai'"
+            )
+        if self.EMBEDDING_PROVIDER == "gemini" and not self.GEMINI_API_KEY:
+            raise ValueError(
+                "GEMINI_API_KEY is required when EMBEDDING_PROVIDER is 'gemini'"
             )
         if self.EMBEDDING_PROVIDER == "bedrock":
             if not self.AWS_ACCESS_KEY_ID or not self.AWS_SECRET_ACCESS_KEY:

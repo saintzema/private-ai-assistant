@@ -132,7 +132,7 @@ export function Header({ breadcrumbs = [], className }: HeaderProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/settings")}>
+            <DropdownMenuItem onClick={() => router.push("/dashboard/settings")}>
               Profile & Settings
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push("/dashboard")}>

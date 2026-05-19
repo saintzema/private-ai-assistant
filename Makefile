@@ -1,5 +1,6 @@
 .PHONY: help dev dev-d build stop clean migrate migrate-create logs logs-backend \
-        shell-backend shell-db test lint format seed create-admin install-frontend
+        shell-backend shell-db test lint format seed create-admin install-frontend \
+        setup local local-migrate local-stop local-worker
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -56,3 +57,23 @@ create-admin: ## Create superuser (usage: make create-admin EMAIL=admin@example.
 
 install-frontend: ## Install frontend dependencies
 	cd frontend && npm install
+
+# ── Local development (no Docker) ─────────────────────────────────────────────
+
+setup:        ## One-time local setup (macOS, no Docker)
+	bash scripts/setup-local.sh
+
+local:        ## Run backend + frontend locally (no Docker)
+	bash scripts/local-dev.sh
+
+local-migrate: ## Run Alembic migrations locally
+	cd backend && .venv/bin/alembic upgrade head
+
+local-stop:   ## Stop local uvicorn + Next.js
+	pkill -f "uvicorn app.main" || true
+	pkill -f "next-server" || true
+
+local-worker: ## Start Celery worker locally (document processing)
+	cd backend && source .venv/bin/activate && \
+	  set -o allexport && source ../.env && set +o allexport && \
+	  .venv/bin/celery -A celery_app worker --loglevel=info

@@ -29,19 +29,34 @@ export function formatBytes(bytes: number, decimals = 1): string {
 
 // ─── Date formatting ──────────────────────────────────────────────────────────
 
-export function formatDate(date: string | Date): string {
-  const d = typeof date === "string" ? parseISO(date) : date;
-  return format(d, "MMM d, yyyy");
+export function formatDate(date?: string | Date | null): string {
+  if (!date) return "Unknown";
+  try {
+    const d = typeof date === "string" ? parseISO(date) : date;
+    return format(d, "MMM d, yyyy");
+  } catch {
+    return "Unknown";
+  }
 }
 
-export function formatDateTime(date: string | Date): string {
-  const d = typeof date === "string" ? parseISO(date) : date;
-  return format(d, "MMM d, yyyy h:mm a");
+export function formatDateTime(date?: string | Date | null): string {
+  if (!date) return "Unknown";
+  try {
+    const d = typeof date === "string" ? parseISO(date) : date;
+    return format(d, "MMM d, yyyy h:mm a");
+  } catch {
+    return "Unknown";
+  }
 }
 
-export function formatRelativeTime(date: string | Date): string {
-  const d = typeof date === "string" ? parseISO(date) : date;
-  return formatDistanceToNow(d, { addSuffix: true });
+export function formatRelativeTime(date?: string | Date | null): string {
+  if (!date) return "Unknown";
+  try {
+    const d = typeof date === "string" ? parseISO(date) : date;
+    return formatDistanceToNow(d, { addSuffix: true });
+  } catch {
+    return "Unknown";
+  }
 }
 
 // ─── String utilities ─────────────────────────────────────────────────────────

@@ -74,6 +74,7 @@ class User(Base):
 
     memberships: Mapped[list["Membership"]] = relationship(  # noqa: F821
         "Membership",
+        foreign_keys="[Membership.user_id]",
         back_populates="user",
         cascade="all, delete-orphan",
     )

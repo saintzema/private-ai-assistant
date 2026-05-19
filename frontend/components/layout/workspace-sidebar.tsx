@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -10,12 +11,13 @@ import {
   Settings,
   Plus,
   ArrowLeft,
-  Sparkles,
+  Hexagon,
   Trash2,
+  ChevronsUpDown,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn, formatRelativeTime, truncate } from "@/lib/utils";
-import { chatsApi } from "@/lib/api";
+import { chatsApi, workspacesApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -56,10 +58,28 @@ export function WorkspaceSidebar({ workspaceId, workspaceName }: WorkspaceSideba
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
+  const switcherRef = useRef<HTMLDivElement>(null);
+
+  const { data: workspaces } = useQuery({
+    queryKey: ["workspaces"],
+    queryFn: () => workspacesApi.list(),
+  });
+
   const { data: chats, isLoading: chatsLoading } = useQuery({
     queryKey: ["chats", workspaceId],
     queryFn: () => chatsApi.list(workspaceId),
   });
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (switcherRef.current && !switcherRef.current.contains(event.target as Node)) {
+        setIsSwitcherOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const createChatMutation = useMutation({
     mutationFn: () => chatsApi.create({ workspace_id: workspaceId }),
@@ -89,12 +109,70 @@ export function WorkspaceSidebar({ workspaceId, workspaceName }: WorkspaceSideba
 
   return (
     <aside className="flex w-64 flex-col border-r bg-sidebar-bg text-sidebar-text">
-      {/* Header */}
-      <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 shrink-0">
-          <Sparkles className="h-4 w-4 text-white" />
-        </div>
-        <span className="text-sm font-semibold text-white truncate">{workspaceName}</span>
+      {/* Header / Workspace Switcher */}
+      <div className="relative border-b border-sidebar-border px-3 py-3" ref={switcherRef}>
+        <button
+          onClick={() => setIsSwitcherOpen(!isSwitcherOpen)}
+          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 hover:bg-sidebar-hover transition-colors text-left group"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 shrink-0 shadow-md">
+              <Hexagon className="h-4 w-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider leading-none">Workspace</p>
+              <p className="text-sm font-semibold text-white truncate mt-0.5 leading-tight">{workspaceName}</p>
+            </div>
+          </div>
+          <ChevronsUpDown className="h-4 w-4 text-slate-500 group-hover:text-slate-300 shrink-0 ml-2" />
+        </button>
+
+        {isSwitcherOpen && (
+          <div className="absolute left-3 right-3 top-[56px] z-50 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden py-1.5 animate-fade-in text-slate-900 dark:text-white">
+            <div className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+              Switch Workspace
+            </div>
+            
+            <div className="max-h-60 overflow-y-auto px-1">
+              {workspaces?.map((w) => {
+                const isCurrent = w.id === workspaceId;
+                return (
+                  <button
+                    key={w.id}
+                    onClick={() => {
+                      setIsSwitcherOpen(false);
+                      router.push(`/workspace/${w.id}/chat`);
+                    }}
+                    className={cn(
+                      "w-full flex items-center justify-between rounded-lg px-2.5 py-2 text-sm text-left transition-colors",
+                      isCurrent
+                        ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                    )}
+                  >
+                    <span className="truncate">{w.name}</span>
+                    {isCurrent && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-blue-600 dark:bg-blue-400 shrink-0 ml-1.5" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="border-t border-slate-100 dark:border-slate-800/80 my-1.5" />
+            
+            <div className="px-1">
+              <Link
+                href="/dashboard"
+                onClick={() => setIsSwitcherOpen(false)}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white transition-colors"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to Dashboard
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}

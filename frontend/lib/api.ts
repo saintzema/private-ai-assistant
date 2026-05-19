@@ -181,6 +181,10 @@ export const authApi = {
     await apiClient.post("/auth/verify-email", { token });
   },
 
+  resendVerification: async (data: { email: string }): Promise<void> => {
+    await apiClient.post("/auth/resend-verification", data);
+  },
+
   forgotPassword: async (email: string): Promise<void> => {
     await apiClient.post("/auth/forgot-password", { email });
   },
@@ -199,7 +203,7 @@ export const usersApi = {
   },
 
   updateProfile: async (data: Partial<Pick<User, "full_name" | "avatar_url">>): Promise<User> => {
-    const response = await apiClient.patch<User>("/users/me", data);
+    const response = await apiClient.put<User>("/users/me", data);
     return response.data;
   },
 
@@ -233,8 +237,8 @@ export const usersApi = {
 
 export const workspacesApi = {
   list: async (): Promise<Workspace[]> => {
-    const response = await apiClient.get<Workspace[]>("/workspaces");
-    return response.data;
+    const response = await apiClient.get<{ workspaces: Workspace[]; total: number }>("/workspaces");
+    return response.data.workspaces;
   },
 
   create: async (data: CreateWorkspaceRequest): Promise<Workspace> => {
@@ -302,11 +306,11 @@ export const documentsApi = {
     workspaceId: string,
     params?: { page?: number; page_size?: number; search?: string; status?: string }
   ): Promise<PaginatedResponse<Document>> => {
-    const response = await apiClient.get<PaginatedResponse<Document>>(
+    const response = await apiClient.get<{ documents: Document[]; total: number; page: number; page_size: number; }>(
       `/workspaces/${workspaceId}/documents`,
       { params }
     );
-    return response.data;
+    return { ...response.data, items: response.data.documents, total_pages: Math.ceil(response.data.total / response.data.page_size) };
   },
 
   upload: async (
@@ -476,6 +480,14 @@ export const subscriptionsApi = {
   createCheckoutSession: async (workspaceId: string, plan: string): Promise<{ url: string }> => {
     const response = await apiClient.post<{ url: string }>(
       `/workspaces/${workspaceId}/subscription/checkout`,
+      { plan }
+    );
+    return response.data;
+  },
+
+  upgrade: async (workspaceId: string, plan: string): Promise<Subscription> => {
+    const response = await apiClient.post<Subscription>(
+      `/subscriptions/${workspaceId}/upgrade`,
       { plan }
     );
     return response.data;

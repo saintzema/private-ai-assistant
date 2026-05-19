@@ -67,7 +67,6 @@ class ChatResponse(BaseModel):
     is_archived: bool
     created_at: datetime
     updated_at: datetime
-    messages: list[MessageResponse] = []
 
 
 class ChatListResponse(BaseModel):

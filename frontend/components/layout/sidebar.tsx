@@ -13,7 +13,7 @@ import {
   Building2,
   ChevronDown,
   Plus,
-  Sparkles,
+  Hexagon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -43,7 +43,7 @@ const navItems = [
   },
   {
     label: "Settings",
-    href: "/settings",
+    href: "/dashboard/settings",
     icon: Settings,
   },
 ];
@@ -82,14 +82,14 @@ export function Sidebar({ className }: SidebarProps) {
         {!collapsed ? (
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600">
-              <Sparkles className="h-4 w-4 text-white" />
+              <Hexagon className="h-4 w-4 text-white" />
             </div>
             <span className="text-sm font-semibold text-white">Private AI</span>
           </Link>
         ) : (
           <Link href="/dashboard" className="flex items-center justify-center w-full">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600">
-              <Sparkles className="h-4 w-4 text-white" />
+              <Hexagon className="h-4 w-4 text-white" />
             </div>
           </Link>
         )}
@@ -114,7 +114,7 @@ export function Sidebar({ className }: SidebarProps) {
               className="w-56 bg-slate-800 border-slate-700 text-slate-200"
               align="start"
             >
-              {workspaces.map((ws) => (
+              {(Array.isArray(workspaces) ? workspaces : []).map((ws) => (
                 <DropdownMenuItem
                   key={ws.id}
                   onClick={() => handleWorkspaceSwitch(ws)}
@@ -152,7 +152,7 @@ export function Sidebar({ className }: SidebarProps) {
 
           if (collapsed) {
             return (
-              <Tooltip key={item.href} delayDuration={0}>
+              <Tooltip key={item.label} delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Link
                     href={item.href}
@@ -173,7 +173,7 @@ export function Sidebar({ className }: SidebarProps) {
 
           return (
             <Link
-              key={item.href}
+              key={item.label}
               href={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",

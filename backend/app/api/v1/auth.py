@@ -213,6 +213,28 @@ async def verify_email(
     return {"message": "Email verified successfully. You can now log in."}
 
 
+@router.post(
+    "/resend-verification",
+    summary="Resend verification email",
+)
+async def resend_verification(
+    payload: PasswordReset, # reusing PasswordReset schema for email
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await _get_user_by_email(db, payload.email)
+    if not user or user.is_verified:
+        return {"message": "If the account exists and is unverified, an email was sent."}
+
+    import secrets
+    verification_token = secrets.token_urlsafe(32)
+    user.email_verification_token = verification_token
+    await db.flush()
+
+    background_tasks.add_task(_send_verification_email, user.email, user.full_name, verification_token)
+    return {"message": "If the account exists and is unverified, an email was sent."}
+
+
 # ── Forgot Password ───────────────────────────────────────────────────────────
 
 @router.post(

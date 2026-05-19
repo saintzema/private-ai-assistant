@@ -227,8 +227,12 @@ export default function MembersPage() {
         ) : (
           <div className="divide-y divide-slate-200 dark:divide-slate-800">
             {members.map((member) => {
-              const initials = generateAvatar(member.user.full_name);
-              const avatarColor = getAvatarColor(member.user.full_name);
+              const fullName = member.user?.full_name || (member as any).user_full_name || "Unknown User";
+              const email = member.user?.email || (member as any).user_email || "";
+              const avatarUrl = member.user?.avatar_url || (member as any).user_avatar_url;
+
+              const initials = generateAvatar(fullName);
+              const avatarColor = getAvatarColor(fullName);
               const isMe = member.user_id === user?.id;
               const isOwner = member.role === RoleEnum.Owner;
 
@@ -236,8 +240,8 @@ export default function MembersPage() {
                 <div key={member.id} className="flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   {/* Avatar */}
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0 ${avatarColor}`}>
-                    {member.user.avatar_url ? (
-                      <img src={member.user.avatar_url} alt={member.user.full_name} className="w-10 h-10 rounded-full object-cover" />
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={fullName} className="w-10 h-10 rounded-full object-cover" />
                     ) : (
                       initials
                     )}
@@ -247,13 +251,13 @@ export default function MembersPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm text-slate-900 dark:text-white truncate">
-                        {member.user.full_name}
+                        {fullName}
                       </span>
                       {isMe && (
                         <span className="text-xs text-slate-400">(you)</span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{member.user.email}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{email}</p>
                   </div>
 
                   {/* Joined */}
