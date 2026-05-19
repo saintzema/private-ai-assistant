@@ -98,12 +98,13 @@ local-restart: ## Cleanly stop everything, clear Next.js cache, and restart
 # These targets patch .env and run the migration if the embedding dimension changes.
 # Always restart with `make local-restart` after switching providers.
 
-use-gemini: ## Switch AI provider to Gemini (gemini-1.5-flash + text-embedding-004 / 768-dim)
+use-gemini: ## Switch AI provider to Gemini (gemini-2.0-flash + gemini-embedding-001 / 768-dim)
 	@echo "→ Switching to Gemini..."
-	@sed -i '' 's/^LLM_PROVIDER=.*/LLM_PROVIDER=gemini/'         .env
-	@sed -i '' 's/^EMBEDDING_PROVIDER=.*/EMBEDDING_PROVIDER=gemini/' .env
-	@sed -i '' 's/^EMBEDDING_DIMENSION=.*/EMBEDDING_DIMENSION=768/'  .env
-	@sed -i '' 's/^GEMINI_CHAT_MODEL=.*/GEMINI_CHAT_MODEL=gemini-1.5-flash/' .env
+	@sed -i '' 's/^LLM_PROVIDER=.*/LLM_PROVIDER=gemini/'                         .env
+	@sed -i '' 's/^EMBEDDING_PROVIDER=.*/EMBEDDING_PROVIDER=gemini/'               .env
+	@sed -i '' 's/^EMBEDDING_DIMENSION=.*/EMBEDDING_DIMENSION=768/'                .env
+	@sed -i '' 's/^GEMINI_CHAT_MODEL=.*/GEMINI_CHAT_MODEL=gemini-2.0-flash/'      .env
+	@sed -i '' 's/^GEMINI_EMBEDDING_MODEL=.*/GEMINI_EMBEDDING_MODEL=gemini-embedding-001/' .env
 	@echo "→ Running migration (resizes vector column if needed)..."
 	@$(MAKE) local-migrate
 	@echo ""

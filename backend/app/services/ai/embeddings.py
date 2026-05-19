@@ -48,15 +48,14 @@ class EmbeddingService:
         return self._openai_client
 
     # ─── Gemini ──────────────────────────────────────────────────────────────
+    # Uses the native Gemini REST API (batchEmbedContents) instead of the
+    # OpenAI-compat endpoint — the compat layer does not support the
+    # gemini-embedding-* model family.
 
-    def _get_gemini_client(self):
-        if self._gemini_client is None:
-            from openai import AsyncOpenAI
-            self._gemini_client = AsyncOpenAI(
-                api_key=settings.GEMINI_API_KEY,
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-            )
-        return self._gemini_client
+    _GEMINI_EMBED_URL = (
+        "https://generativelanguage.googleapis.com/v1beta/models"
+        "/{model}:batchEmbedContents?key={key}"
+    )
 
     @retry(
         retry=retry_if_exception_type(Exception),
@@ -65,12 +64,27 @@ class EmbeddingService:
         reraise=True,
     )
     async def _gemini_embed_batch(self, texts: list[str]) -> list[list[float]]:
-        client = self._get_gemini_client()
-        response = await client.embeddings.create(
-            model=settings.GEMINI_EMBEDDING_MODEL,
-            input=texts,
-        )
-        return [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
+        import httpx
+
+        model = settings.GEMINI_EMBEDDING_MODEL
+        dim = settings.EMBEDDING_DIMENSION  # gemini-embedding-001 supports 768/1024/1536/3072
+        url = self._GEMINI_EMBED_URL.format(model=model, key=settings.GEMINI_API_KEY)
+        payload = {
+            "requests": [
+                {
+                    "model": f"models/{model}",
+                    "content": {"parts": [{"text": t}]},
+                    "outputDimensionality": dim,
+                }
+                for t in texts
+            ]
+        }
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+
+        return [item["values"] for item in data["embeddings"]]
 
     @retry(
         retry=retry_if_exception_type(Exception),
