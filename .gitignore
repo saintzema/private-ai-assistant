@@ -75,3 +75,4 @@ secrets/
 *.crt
 *.p12
 .local
+.pids/

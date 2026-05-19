@@ -70,21 +70,25 @@ local:        ## Run backend + frontend locally (no Docker)
 local-migrate: ## Run Alembic migrations locally
 	cd backend && .venv/bin/alembic upgrade head
 
-local-stop:   ## Stop local uvicorn + Next.js
-	pkill -f "uvicorn app.main" || true
-	pkill -f "next-server" || true
+local-stop:   ## Stop all local dev processes (uses .pids/ to avoid killing unrelated processes)
+	@for svc in redis uvicorn next; do \
+	  pidfile=".pids/$$svc.pid"; \
+	  if [ -f "$$pidfile" ]; then \
+	    pid=$$(cat "$$pidfile"); \
+	    echo "→ Stopping $$svc (PID $$pid)..."; \
+	    kill "$$pid" 2>/dev/null || true; \
+	    rm -f "$$pidfile"; \
+	  fi; \
+	done
+	@echo "✓ All local services stopped."
 
 local-worker: ## Start Celery worker locally (document processing)
 	cd backend && source .venv/bin/activate && \
 	  set -o allexport && source ../.env && set +o allexport && \
 	  .venv/bin/celery -A celery_app worker --loglevel=info
 
-local-restart: ## Kill and fully restart local stack (clears Next.js cache)
-	@echo "→ Stopping processes..."
-	@pkill -f "uvicorn app.main" 2>/dev/null || true
-	@pkill -f "next-server" 2>/dev/null || true
-	@pkill -f "next dev" 2>/dev/null || true
-	@sleep 1
+local-restart: ## Cleanly stop everything, clear Next.js cache, and restart
+	@$(MAKE) local-stop
 	@echo "→ Clearing Next.js cache..."
 	@rm -rf frontend/.next
 	@echo "→ Starting fresh..."
