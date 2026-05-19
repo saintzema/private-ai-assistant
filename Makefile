@@ -1,6 +1,7 @@
 .PHONY: help dev dev-d build stop clean migrate migrate-create logs logs-backend \
         shell-backend shell-db test lint format seed create-admin install-frontend \
-        setup local local-migrate local-stop local-worker
+        setup local local-migrate local-stop local-worker local-restart \
+        use-gemini use-bedrock use-openai
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -77,3 +78,61 @@ local-worker: ## Start Celery worker locally (document processing)
 	cd backend && source .venv/bin/activate && \
 	  set -o allexport && source ../.env && set +o allexport && \
 	  .venv/bin/celery -A celery_app worker --loglevel=info
+
+local-restart: ## Kill and fully restart local stack (clears Next.js cache)
+	@echo "→ Stopping processes..."
+	@pkill -f "uvicorn app.main" 2>/dev/null || true
+	@pkill -f "next-server" 2>/dev/null || true
+	@pkill -f "next dev" 2>/dev/null || true
+	@sleep 1
+	@echo "→ Clearing Next.js cache..."
+	@rm -rf frontend/.next
+	@echo "→ Starting fresh..."
+	@bash scripts/local-dev.sh
+
+# ── AI provider switching ──────────────────────────────────────────────────────
+# These targets patch .env and run the migration if the embedding dimension changes.
+# Always restart with `make local-restart` after switching providers.
+
+use-gemini: ## Switch AI provider to Gemini (gemini-1.5-flash + text-embedding-004 / 768-dim)
+	@echo "→ Switching to Gemini..."
+	@sed -i '' 's/^LLM_PROVIDER=.*/LLM_PROVIDER=gemini/'         .env
+	@sed -i '' 's/^EMBEDDING_PROVIDER=.*/EMBEDDING_PROVIDER=gemini/' .env
+	@sed -i '' 's/^EMBEDDING_DIMENSION=.*/EMBEDDING_DIMENSION=768/'  .env
+	@sed -i '' 's/^GEMINI_CHAT_MODEL=.*/GEMINI_CHAT_MODEL=gemini-1.5-flash/' .env
+	@echo "→ Running migration (resizes vector column if needed)..."
+	@$(MAKE) local-migrate
+	@echo ""
+	@echo "✓ Now using Gemini. Run: make local-restart"
+	@echo "  Make sure GEMINI_API_KEY is set in .env"
+	@echo "  Get one free at: https://aistudio.google.com/apikey"
+
+use-bedrock: ## Switch AI provider to AWS Bedrock (Claude 3.5 Sonnet + Titan Embed v2 / 1024-dim)
+	@echo "→ Switching to AWS Bedrock..."
+	@sed -i '' 's/^LLM_PROVIDER=.*/LLM_PROVIDER=bedrock/'           .env
+	@sed -i '' 's/^EMBEDDING_PROVIDER=.*/EMBEDDING_PROVIDER=bedrock/' .env
+	@sed -i '' 's/^EMBEDDING_DIMENSION=.*/EMBEDDING_DIMENSION=1024/'  .env
+	@sed -i '' 's/^AWS_BEDROCK_MODEL_ID=.*/AWS_BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0/' .env
+	@sed -i '' 's/^AWS_BEDROCK_EMBEDDING_MODEL_ID=.*/AWS_BEDROCK_EMBEDDING_MODEL_ID=amazon.titan-embed-text-v2:0/' .env
+	@echo "→ Running migration (resizes vector column to 1024 dims)..."
+	@$(MAKE) local-migrate
+	@echo ""
+	@echo "✓ Now using AWS Bedrock. Run: make local-restart"
+	@echo "  Required in .env:"
+	@echo "    AWS_ACCESS_KEY_ID     — your IAM access key"
+	@echo "    AWS_SECRET_ACCESS_KEY — your IAM secret key"
+	@echo "    AWS_REGION            — region where Bedrock is enabled (e.g. us-east-1)"
+	@echo "  Enable models in AWS Console → Bedrock → Model Access:"
+	@echo "    • Anthropic Claude 3.5 Sonnet v2"
+	@echo "    • Amazon Titan Embed Text v2"
+
+use-openai: ## Switch AI provider to OpenAI (gpt-4o + text-embedding-3-small / 1536-dim)
+	@echo "→ Switching to OpenAI..."
+	@sed -i '' 's/^LLM_PROVIDER=.*/LLM_PROVIDER=openai/'           .env
+	@sed -i '' 's/^EMBEDDING_PROVIDER=.*/EMBEDDING_PROVIDER=openai/' .env
+	@sed -i '' 's/^EMBEDDING_DIMENSION=.*/EMBEDDING_DIMENSION=1536/' .env
+	@echo "→ Running migration (resizes vector column to 1536 dims)..."
+	@$(MAKE) local-migrate
+	@echo ""
+	@echo "✓ Now using OpenAI. Run: make local-restart"
+	@echo "  Make sure OPENAI_API_KEY is set in .env"
