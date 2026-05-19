@@ -68,10 +68,43 @@ async def list_workspaces(
         .order_by(Workspace.created_at.desc())
     )
     workspaces = result.scalars().all()
-    return WorkspaceListResponse(
-        workspaces=[WorkspaceResponse.model_validate(w) for w in workspaces],
-        total=len(workspaces),
-    )
+
+    if not workspaces:
+        return WorkspaceListResponse(workspaces=[], total=0)
+
+    workspace_ids = [w.id for w in workspaces]
+
+    # Batch-fetch all counts in 3 queries (not N+1)
+    member_rows = (await db.execute(
+        select(Membership.workspace_id, func.count(Membership.id))
+        .where(Membership.workspace_id.in_(workspace_ids))
+        .group_by(Membership.workspace_id)
+    )).all()
+    member_counts: dict = {wid: cnt for wid, cnt in member_rows}
+
+    doc_rows = (await db.execute(
+        select(Document.workspace_id, func.count(Document.id))
+        .where(Document.workspace_id.in_(workspace_ids))
+        .group_by(Document.workspace_id)
+    )).all()
+    doc_counts: dict = {wid: cnt for wid, cnt in doc_rows}
+
+    chat_rows = (await db.execute(
+        select(Chat.workspace_id, func.count(Chat.id))
+        .where(Chat.workspace_id.in_(workspace_ids))
+        .group_by(Chat.workspace_id)
+    )).all()
+    chat_counts: dict = {wid: cnt for wid, cnt in chat_rows}
+
+    responses = []
+    for w in workspaces:
+        r = WorkspaceResponse.model_validate(w)
+        r.member_count = member_counts.get(w.id, 0)
+        r.document_count = doc_counts.get(w.id, 0)
+        r.chat_count = chat_counts.get(w.id, 0)
+        responses.append(r)
+
+    return WorkspaceListResponse(workspaces=responses, total=len(responses))
 
 
 @router.post(
@@ -129,7 +162,22 @@ async def get_workspace(
     db: AsyncSession = Depends(get_db),
 ) -> WorkspaceResponse:
     workspace = await _get_workspace_or_404(db, workspace_id)
-    return WorkspaceResponse.model_validate(workspace)
+
+    member_count = (await db.execute(
+        select(func.count(Membership.id)).where(Membership.workspace_id == workspace_id)
+    )).scalar() or 0
+    doc_count = (await db.execute(
+        select(func.count(Document.id)).where(Document.workspace_id == workspace_id)
+    )).scalar() or 0
+    chat_count = (await db.execute(
+        select(func.count(Chat.id)).where(Chat.workspace_id == workspace_id)
+    )).scalar() or 0
+
+    r = WorkspaceResponse.model_validate(workspace)
+    r.member_count = member_count
+    r.document_count = doc_count
+    r.chat_count = chat_count
+    return r
 
 
 @router.put("/{workspace_id}", response_model=WorkspaceResponse, summary="Update workspace")

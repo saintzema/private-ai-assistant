@@ -13,11 +13,13 @@ export function getToken(): string | null {
 export function setToken(token: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  document.cookie = `access_token=${token}; path=/; max-age=86400; samesite=lax`;
 }
 
 export function removeToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(ACCESS_TOKEN_KEY);
+  document.cookie = `access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 }
 
 export function getRefreshToken(): string | null {
@@ -28,11 +30,15 @@ export function getRefreshToken(): string | null {
 export function setRefreshToken(token: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(REFRESH_TOKEN_KEY, token);
+  // Also persist in a cookie so Next.js middleware can detect an active session
+  // during RSC payload requests (when the short-lived access_token has expired)
+  document.cookie = `refresh_token=${token}; path=/; max-age=2592000; samesite=lax`; // 30 days
 }
 
 export function removeRefreshToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  document.cookie = `refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 }
 
 export function clearTokens(): void {

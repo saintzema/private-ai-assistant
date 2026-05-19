@@ -49,6 +49,11 @@ class WorkspaceResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    # Counts — populated by the API layer (not ORM attributes)
+    member_count: int = 0
+    document_count: int = 0
+    chat_count: int = 0
+
 
 class WorkspaceListResponse(BaseModel):
     workspaces: list[WorkspaceResponse]
