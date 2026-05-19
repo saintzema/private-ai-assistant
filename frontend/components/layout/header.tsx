@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Bell, Sun, Moon, Monitor, ChevronRight } from "lucide-react";
+import { Search, Bell, Sun, Moon, Monitor, ChevronRight, CheckCheck } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -17,7 +18,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface BreadcrumbItem {
   label: string;
@@ -55,6 +55,143 @@ function ThemeToggle() {
     </DropdownMenu>
   );
 }
+
+// ─── Notification types ───────────────────────────────────────────────────────
+
+type NotificationType = "info" | "success" | "warning";
+
+interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  description: string;
+  time: string;
+  read: boolean;
+}
+
+// Seed data — replace with a real API call when a backend endpoint exists
+const INITIAL_NOTIFICATIONS: Notification[] = [];
+
+function NotificationDot({ type }: { type: NotificationType }) {
+  return (
+    <span
+      className={cn(
+        "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+        type === "success" && "bg-emerald-500",
+        type === "warning" && "bg-amber-500",
+        type === "info"    && "bg-blue-500",
+      )}
+    />
+  );
+}
+
+function NotificationsDropdown() {
+  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllRead = () =>
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+
+  const markRead = (id: string) =>
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" className="relative">
+          <Bell className="h-4 w-4" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+            </span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="end" className="w-80 p-0" sideOffset={8}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold">Notifications</p>
+            {unreadCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[10px] font-bold text-white">
+                {unreadCount}
+              </span>
+            )}
+          </div>
+          {unreadCount > 0 && (
+            <button
+              onClick={markAllRead}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              Mark all read
+            </button>
+          )}
+        </div>
+
+        {/* List */}
+        <div className="max-h-80 overflow-y-auto">
+          {notifications.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 px-4 text-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                <Bell className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">You&apos;re all caught up</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  No new notifications right now
+                </p>
+              </div>
+            </div>
+          ) : (
+            notifications.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => markRead(n.id)}
+                className={cn(
+                  "w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50",
+                  !n.read && "bg-blue-50/50 dark:bg-blue-950/20"
+                )}
+              >
+                <NotificationDot type={n.type} />
+                <div className="flex-1 min-w-0">
+                  <p className={cn("text-sm leading-snug", !n.read && "font-medium")}>
+                    {n.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                    {n.description}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/70 mt-1">{n.time}</p>
+                </div>
+                {!n.read && (
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                )}
+              </button>
+            ))
+          )}
+        </div>
+
+        {/* Footer */}
+        {notifications.length > 0 && (
+          <>
+            <div className="border-t" />
+            <div className="p-2">
+              <button className="w-full rounded-md px-3 py-1.5 text-xs text-center text-muted-foreground hover:bg-muted transition-colors">
+                View all notifications
+              </button>
+            </div>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function Header({ breadcrumbs = [], className }: HeaderProps) {
   const router = useRouter();
@@ -105,15 +242,7 @@ export function Header({ breadcrumbs = [], className }: HeaderProps) {
         <ThemeToggle />
 
         {/* Notifications */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" className="relative">
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-500" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Notifications</TooltipContent>
-        </Tooltip>
+        <NotificationsDropdown />
 
         {/* User menu */}
         <DropdownMenu>
