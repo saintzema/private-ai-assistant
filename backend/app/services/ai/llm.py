@@ -34,41 +34,31 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
 
 
 def _generate_mock_fallback_response(messages: list[dict], system_prompt: Optional[str] = None) -> str:
-    # Try to find context
-    context = ""
-    if system_prompt and "CONTEXT" in system_prompt:
-        context = system_prompt.split("CONTEXT")[-1].strip()
-    else:
-        for msg in messages:
-            if msg.get("role") == "system" and "CONTEXT" in msg.get("content", ""):
-                context = msg["content"].split("CONTEXT")[-1].strip()
-                break
+    """
+    Friendly error message shown when the configured LLM provider is
+    unreachable (quota exceeded, bad key, network error, etc.).
+    Does NOT dump raw context chunks — those are unreadable in the UI.
+    """
+    provider = "unknown"
+    try:
+        from app.core.config import settings as _s
+        provider = _s.LLM_PROVIDER
+    except Exception:
+        pass
 
-    if context:
-        # Clean up leading DOCUMENTS: or : if present
-        if context.startswith("DOCUMENTS:"):
-            context = context[len("DOCUMENTS:"):].strip()
-        elif context.startswith("Documents:"):
-            context = context[len("Documents:"):].strip()
-        elif context.startswith(":"):
-            context = context[1:].strip()
-
-    response = "⚠️ [Mock Fallback Mode - API Quota Exceeded]\n\n"
-    if context:
-        # Clean up context a bit
-        lines = [line.strip() for line in context.split("\n") if line.strip()][:15]
-        context_preview = "\n".join(lines)
-        response += (
-            "The document intelligence engine successfully retrieved the following matching sections from your knowledge base:\n\n"
-            f"```text\n{context_preview}\n```\n\n"
-            "To get a fully natural AI answer, please update your `OPENAI_API_KEY` in the `.env` file with a key that has active credits."
-        )
-    else:
-        response += (
-            "The AI chat engine is online, but the underlying LLM provider (OpenAI) returned a quota/rate limit error (429).\n\n"
-            "Please check your OpenAI billing details or update the `OPENAI_API_KEY` in your `.env` file."
-        )
-    return response
+    return (
+        "**Unable to reach the AI provider right now.**\n\n"
+        f"The configured provider (`{provider}`) returned an error — this is usually caused by:\n\n"
+        "- An invalid or expired API key\n"
+        "- Quota / rate-limit exceeded on your account\n"
+        "- The model not being enabled in your cloud console\n\n"
+        "**To fix:** open your `.env` file and check these settings:\n\n"
+        "```\n"
+        "LLM_PROVIDER=gemini          # or: openai | bedrock\n"
+        "GEMINI_API_KEY=...           # get from aistudio.google.com/apikey\n"
+        "```\n\n"
+        "Restart the backend after saving changes."
+    )
 
 
 class LLMService:
